@@ -13,7 +13,6 @@
 /* ... TODO ... */
 
 #include <functional>
-#include <memory>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -28,6 +27,80 @@ using std::end;
 template <class T>
 using unq = typename std::remove_const<
             typename std::remove_reference<T>::type>::type;
+
+template <class T>
+class optional                                                //  {{{1
+{
+public:
+  using  stored_t = unq<T>;
+  struct nullopt_t {};
+  static nullopt_t nullopt;
+  class bad_optional_access : std::logic_error
+  {
+  public:
+    bad_optional_access() : std::logic_error("no value") {}
+  };
+private:
+  struct _empty_t {};
+  union { _empty_t _empty; stored_t _value; };
+  bool  _has_value = false;
+private:
+  template<class... Args>
+  void _construct(Args&&... args)
+  { ::new(std::addressof(_value)) stored_t(std::forward<Args...>(args...));
+    _has_value = true; }
+  void _destruct() { _has_value = false; _value.~stored_t(); }
+public:
+  optional()            : _empty{} {}
+  optional(nullopt_t)   : optional() {}
+  optional(const T& t)  : _value(t), _has_value(true) {}
+  ~optional()             { reset(); }
+
+  optional& operator = (nullopt_t)
+  { reset(); return *this; }
+  template<class U>
+  optional& operator = (U&& value)
+  {
+    if (_has_value) _value = std::forward<U>(value);
+    else            _construct(std::forward<U>(value));
+    return *this;
+  }
+
+  template<class... Args>
+  void emplace(Args&&... args)
+  { reset(); _construct(std::forward<Args>(args)...); }
+  template<class U, class... Args>
+  void emplace(std::initializer_list<U> ilist, Args&&... args)
+  { reset(); _construct(ilist, std::forward<Args>(args)...); }
+  void reset()
+  { if (_has_value) _destruct(); }
+
+  T& value() &
+  { if (!_has_value) throw bad_optional_access(); return _value; }
+  const T& value() const &
+  { if (!_has_value) throw bad_optional_access(); return _value; }
+  T&& value() &&
+  { if (!_has_value) throw bad_optional_access(); return std::move(_value); }
+  const T&& value() const &&
+  { if (!_has_value) throw bad_optional_access(); return std::move(_value); }
+
+  T& operator*() &                { return _value; }
+  const T& operator*() const &    { return _value; }
+  T&& operator*() &&              { return std::move(_value); }
+  const T&& operator*() const &&  { return std::move(_value); }
+
+  template<class U>
+  T value_or(U&& d) &&
+  { return _has_value ? std::move(**this)
+                      : static_cast<T>(std::forward<U>(d)); }
+  template<class U>
+  T value_or(U&& d) const &
+  { return _has_value ? **this
+                      : static_cast<T>(std::forward<U>(d)); }
+
+  explicit operator bool() const  { return _has_value; }
+  bool has_value()         const  { return _has_value; }
+};                                                            //  }}}1
 
 /* ... TODO ... */
 
@@ -90,7 +163,68 @@ auto chain(SeqA&& seq_a, SeqB&& seq_b)                        //  {{{1
     (begin(seq_a), end(seq_a), begin(seq_b), end(seq_b));
 }                                                             //  }}}1
 
-// TODO: Filter
+template <class F, class T, class It>
+class Filter                                                  //  {{{1
+{
+public:
+  class iterator                                              //  {{{2
+  {
+  private:
+    Filter c; optional<const unq<T>> v; bool peeked;
+  private:
+    void peek()
+    {
+      if (!peeked) {
+        peeked = true;
+        while (c.it != c.end_) {
+          v.emplace(*c.it); ++c.it; if (c.f(*v)) break;
+        }
+        if (!(c.it != c.end_)) v.reset();
+      }
+    }
+  public:
+    iterator(Filter c) : c(c), v(), peeked(false) {}
+    bool not_at_end()
+    {
+      peek(); return v.has_value();
+    }
+    bool operator != (const iterator&)
+    {
+      return not_at_end();
+    }
+    void operator++()
+    {
+      if(not_at_end()) peeked = false;
+    }
+    unq<T> operator*()
+    {
+      if (not_at_end()) return *v;
+      throw std::out_of_range(
+        "Filter::iterator::operator*(): end reached");
+    }
+  };                                                          //  }}}2
+private:
+  const F f; It it; const It end_;
+public:
+  Filter(F f, const It& begin, const It& end_)
+    : f(f), it(begin), end_(end_) {}
+  Filter(const Filter&) = default;
+//Filter(Filter&& rhs)
+//  : f(rhs.f), it(rhs.it), end_(rhs.end_)
+//{
+//  std::cout << "*** Filter MOVE ***" << std::endl;          //  TODO
+//}
+  iterator begin() { return iterator(*this); }
+  iterator end()   { return iterator(*this); }
+};                                                            //  }}}1
+
+template <class F, class Seq>
+auto filter(F f, Seq&& seq)                                   //  {{{1
+  -> Filter<F, decltype(*begin(seq)), decltype(begin(seq))>
+{
+  return Filter<F, decltype(*begin(seq)), decltype(begin(seq))>
+    (f, begin(seq), end(seq));
+}                                                             //  }}}1
 
 template <class F, class T, class It>
 class Map                                                     //  {{{1
@@ -144,8 +278,6 @@ auto map(F f, Seq&& seq)                                      //  {{{1
     (f, begin(seq), end(seq));
 }                                                             //  }}}1
 
-// TODO: TakeWhile
-
 template <class T, class It>
 class Slice                                                   //  {{{1
 {
@@ -161,7 +293,7 @@ public:
     }
     void fwd()
     {
-      while (c.start > 0 and not_done()) { ++c.it; ++n; --c.start; }
+      while (c.start > 0 && not_done()) { ++c.it; ++n; --c.start; }
     }
   public:
     iterator(Slice c) : c(c), n(0) {}
@@ -227,6 +359,69 @@ auto slice(Seq&& seq, const long& stop)                       //  {{{1
     (begin(seq), end(seq), 0, stop, 1);
 }                                                             //  }}}1
 
+template <class F, class T, class It>
+class TakeWhile                                               //  {{{1
+{
+public:
+  class iterator                                              //  {{{2
+  {
+  private:
+    TakeWhile c; optional<const unq<T>> v; bool peeked;
+  private:
+    void peek()
+    {
+      if (!peeked) {
+        peeked = true;
+        if (c.it != c.end_) {
+          v.emplace(*c.it); ++c.it; if (c.f(*v)) return;
+        }
+        v.reset();
+      }
+    }
+  public:
+    iterator(TakeWhile c) : c(c), v(), peeked(false) {}
+    bool not_at_end()
+    {
+      peek(); return v.has_value();
+    }
+    bool operator != (const iterator&)
+    {
+      return not_at_end();
+    }
+    void operator++()
+    {
+      if (not_at_end()) peeked = false;
+    }
+    unq<T> operator*()
+    {
+      if (not_at_end()) return *v;
+      throw std::out_of_range(
+        "TakeWhile::iterator::operator*(): end reached");
+    }
+  };                                                          //  }}}2
+private:
+  F f; It it; const It end_;
+public:
+  TakeWhile(F f, const It& begin, const It& end_)
+    : f(f), it(begin), end_(end_) {}
+  TakeWhile(const TakeWhile&) = default;
+//TakeWhile(TakeWhile&& rhs)
+//  : f(rhs.f), it(rhs.it), end_(rhs.end_)
+//{
+//  std::cout << "*** TakeWhile MOVE ***" << std::endl;       //  TODO
+//}
+  iterator begin() { return iterator(*this); }
+  iterator end()   { return iterator(*this); }
+};                                                            //  }}}1
+
+template <class F, class Seq>
+auto take_while(F f, Seq&& seq)                               //  {{{1
+  -> TakeWhile<F, decltype(*begin(seq)), decltype(begin(seq))>
+{
+  return TakeWhile<F, decltype(*begin(seq)), decltype(begin(seq))>
+    (f, begin(seq), end(seq));
+}                                                             //  }}}1
+
 template <class S, class T, class ItA, class ItB>
 class Zip                                                     //  {{{1
 {
@@ -284,6 +479,12 @@ auto zip(SeqA&& seq_a, SeqB&& seq_b)                          //  {{{1
     (begin(seq_a), end(seq_a), begin(seq_b), end(seq_b));
 }                                                             //  }}}1
 
+class IndexError : public std::out_of_range
+{
+public:
+  IndexError() : std::out_of_range("invalid index") {}
+};
+
 class StopIteration : public std::out_of_range
 {
 public:
@@ -317,21 +518,21 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Generator g; std::shared_ptr<const unq<T>> v; bool peeked;
+    Generator g; optional<const unq<T>> v; bool peeked;
   private:
     void peek()
     {
       if (!peeked) {
         peeked = true;
-        try { v = std::make_shared<const unq<T>>(g.next()); }
-        catch (const StopIteration &) { v = nullptr; }
+        try                           { v.emplace(g.next()); }
+        catch (const StopIteration &) { v.reset(); }
       }
     }
   public:
-    iterator(Generator g) : g(g), v(nullptr), peeked(false) {}
+    iterator(Generator g) : g(g), v(), peeked(false) {}
     bool not_at_end()
     {
-      peek(); return v != nullptr;
+      peek(); return v.has_value();
     }
     bool operator != (const iterator&)
     {
@@ -339,7 +540,7 @@ public:
     }
     void operator++()
     {
-      peek(); if (v != nullptr) peeked = false;
+      if (not_at_end()) peeked = false;
     }
     unq<T> operator*()
     {
@@ -366,8 +567,6 @@ template <class T, class F>
 auto generator(F next) -> Generator<decltype(next())>
 { return Generator<decltype(next())>(next); }
 
-// ...
-
 // TODO: thread-safe w/ locking
 template <class T, class It>
 class LList                                                   //  {{{1
@@ -381,8 +580,7 @@ public:
   private:
     void get()
     {
-      try                           { v = &l[n]  ; }
-      catch (const StopIteration &) { v = nullptr; }
+      try { v = &l[n]; } catch (const IndexError &) { v = nullptr; }
     }
   public:
     iterator(LList& l) : l(l), n(0), v(nullptr) {}
@@ -445,7 +643,7 @@ public:
       catch (const StopIteration&) { has_next = _next::done; break; }
       data.push_back(v);
     }
-    if (i >= data.size()) throw StopIteration();
+    if (i >= data.size()) throw IndexError();
     return data[i];
   }
   Slice<unq<T>, iterator>
@@ -469,8 +667,8 @@ auto llist(Seq&& seq)                                         //  {{{1
 }                                                             //  }}}1
 
 template <class T>
-auto llist() -> LList<T, int*>
-{ return LList<T, int*> (nullptr, nullptr); }
+auto llist() -> LList<T, char*>
+{ return LList<T, char*> (nullptr, nullptr); }
 
 // erastothenes
 // ...
@@ -500,6 +698,13 @@ int main()                                                    //  {{{1
   }
 
   {
+    cout <<  "filter({ x % 2 == 0 }, chain(a, b))" << endl;
+    auto xs = filter([](int x){ return x % 2 == 0; }, chain(a, b));
+    for (auto x : xs) cout << x << " ";
+    cout << endl;
+  }
+
+  {
     cout <<  "map({ x*x }, chain(a, b))" << endl;
     auto xs = map([](int x){ return x*x; }, chain(a, b));
     for (auto x : xs) cout << x << " ";
@@ -516,6 +721,13 @@ int main()                                                    //  {{{1
   {
     cout <<  "slice(chain(a, b), 3, 6, 2)" << endl;
     auto xs = slice(chain(a, b), 3, 6, 2);
+    for (auto x : xs) cout << x << " ";
+    cout << endl;
+  }
+
+  {
+    cout <<  "take_while({ x < 7 }, chain(a, b))" << endl;
+    auto xs = take_while([](int x){ return x < 7; }, chain(a, b));
     for (auto x : xs) cout << x << " ";
     cout << endl;
   }
@@ -560,7 +772,7 @@ int main()                                                    //  {{{1
   {
     cout <<  "llist(map({ x*x }, chain(a, b)))" << endl;
     auto xs = llist(map([](int x){ return x*x; }, chain(a, b)));
-    cout << "[3] = " << xs[3] << ", [6] = " << xs[6] << endl;
+    cout << "xs[3] = " << xs[3] << ", xs[6] = " << xs[6] << endl;
     for (auto x : xs) cout << x << " ";
     cout << endl;
   }
@@ -587,7 +799,7 @@ int main()                                                    //  {{{1
     cout << endl;
   }
 
-  const std::vector<int> init = {0,1}; int i = 0;
+  const vector<int> init = {0,1}; int i = 0;
   auto fibs = llist(init);
   fibs.append([&fibs,&i](){ ++i; return fibs[i-1] + fibs[i]; });
 
@@ -612,9 +824,23 @@ int main()                                                    //  {{{1
   }
 
   {
-    cout << "fibs (again)" << endl;
+    cout << "sliced fibs" << endl;
     for (auto x : fibs(0, 17, 2)) cout << x << " ";
     cout << endl;
+  }
+
+  {
+    cout << "fibs -> map -> take_while -> filter -> zip w/ chain" << endl;
+    auto xs =
+      llist(
+        zip(chain(a, chain(b, c)),
+          filter([](int x) { return x % 2 == 1 || x % 3 == 1; },
+            take_while([](int x) { return x < 10000; },
+              map([](int x){ return x*x; }, fibs)))));
+    for (auto x : xs(10)) cout << get<0>(x) << "," << get<1>(x) << " ";
+    cout << endl;
+    cout << "xs[5]<0> = " << get<0>(xs[5]) <<
+          ", xs[7]<0> = " << get<1>(xs[7]) << endl;
   }
 
   /* ... TODO ... */

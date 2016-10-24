@@ -2,12 +2,16 @@ chain(a, b)
 1 2 3 4 5 6 7 8 9 10 
 chain(a, chain(b, c))
 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 
+filter({ x % 2 == 0 }, chain(a, b))
+2 4 6 8 
 map({ x*x }, chain(a, b))
 1 4 9 16 25 36 49 64 81 100 
 slice(chain(a, b), 0, -1, 2)
 1 3 5 7 9 
 slice(chain(a, b), 3, 6, 2)
 4 6 
+take_while({ x < 7 }, chain(a, b))
+1 2 3 4 5 6 
 zip(a, b)
 1,6 2,7 3,8 4,9 5,10 
 zip(map({ x*x }, chain(a, b)), c)
@@ -17,7 +21,7 @@ generator(10, i > 0, i--)
 $generator(37; 1, i < 20, i+=2; 42)
 37 1 3 5 7 9 11 13 15 17 19 42 
 llist(map({ x*x }, chain(a, b)))
-[3] = 16, [6] = 49
+xs[3] = 16, xs[6] = 49
 1 4 9 16 25 36 49 64 81 100 
 llist(1).append({ x++ }) break at > 10
 1 2 3 4 5 6 7 8 9 10 
@@ -29,5 +33,8 @@ llist(map({ x*x }, fibs))
 0 1 1 4 9 25 64 169 441 1156 
 fibs2
 0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 
-fibs (again)
+sliced fibs
 0 1 3 8 21 55 144 377 987 
+fibs -> map -> take_while -> filter -> zip w/ chain
+1,1 2,1 3,4 4,9 5,25 6,64 7,169 8,441 9,1156 10,3025 
+xs[5]<0> = 6, xs[7]<0> = 441
