@@ -3,8 +3,8 @@ compiler:
 - clang
 - gcc
 script: make test
-install: if [ "$GXX" = g++ ]; then export GXX=g++-6;
-                              else export GXX=clang++-3.8; fi
+install: if [ "$CXX" = g++ ]; then export CXX=g++-6;
+                              else export CXX=clang++-3.8; fi
 addons:
   apt:
     sources:
