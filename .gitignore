@@ -1,0 +1,5 @@
+*.swp
+*~
+
+/algorithms
+.gdb_history
