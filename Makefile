@@ -1,4 +1,4 @@
-CXXFLAGS  = -Wall -Wextra -Werror -std=c++11 -g
+CXXFLAGS  = -Wall -Wextra -Werror -std=c++11 -g -O2
 SHELL     = bash
 
 .PHONY: all test clean

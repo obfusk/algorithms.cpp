@@ -38,14 +38,14 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Chain& c;
+    Chain c;
   public:
-    iterator(Chain& c) : c(c) {}
-    bool not_at_end() const
+    iterator(Chain c) : c(c) {}
+    bool not_at_end()
     {
       return c.it_a != c.end_a || c.it_b != c.end_b;
     }
-    bool operator != (const iterator&) const
+    bool operator != (const iterator&)
     {
       return not_at_end();
     }
@@ -54,7 +54,7 @@ public:
       if      (c.it_a != c.end_a) ++c.it_a;
       else if (c.it_b != c.end_b) ++c.it_b;
     }
-    unq<T> operator*() const
+    unq<T> operator*()
     {
       if      (c.it_a != c.end_a) return *c.it_a;
       else if (c.it_b != c.end_b) return *c.it_b;
@@ -69,6 +69,13 @@ public:
   Chain(const ItA& begin_a, const ItA& end_a,
         const ItB& begin_b, const ItB& end_b)
     : it_a(begin_a), end_a(end_a), it_b(begin_b), end_b(end_b) {}
+  Chain(const Chain&) = default;
+//Chain(Chain&& rhs)
+//  : it_a(rhs.it_a), end_a(rhs.end_a),
+//    it_b(rhs.it_b), end_b(rhs.end_b)
+//{
+//  std::cout << "*** Chain MOVE ***" << std::endl;           //  TODO
+//}
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
 };                                                            //  }}}1
@@ -92,14 +99,14 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Map& c;
+    Map c;
   public:
-    iterator(Map& c) : c(c) {}
-    bool not_at_end() const
+    iterator(Map c) : c(c) {}
+    bool not_at_end()
     {
       return c.it != c.end_;
     }
-    bool operator != (const iterator&) const
+    bool operator != (const iterator&)
     {
       return not_at_end();
     }
@@ -107,7 +114,7 @@ public:
     {
       if (not_at_end()) ++c.it;
     }
-    unq<T> operator*() const
+    unq<T> operator*()
     {
       if (not_at_end()) return c.f(*c.it);
       else throw std::out_of_range(
@@ -119,6 +126,12 @@ private:
 public:
   Map(F f, const It& begin, const It& end_)
     : f(f), it(begin), end_(end_) {}
+  Map(const Map&) = default;
+//Map(Map&& rhs)
+//  : f(rhs.f), it(rhs.it), end_(rhs.end_)
+//{
+//  std::cout << "*** Map MOVE ***" << std::endl;             //  TODO
+//}
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
 };                                                            //  }}}1
@@ -140,9 +153,9 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Slice& c; long n;
+    Slice c; long n;
   private:
-    bool not_done() const
+    bool not_done()
     {
       return (c.stop == -1 || n < c.stop) && c.it != c.end_;
     }
@@ -151,7 +164,7 @@ public:
       while (c.start > 0 and not_done()) { ++c.it; ++n; --c.start; }
     }
   public:
-    iterator(Slice& c) : c(c), n(0) {}
+    iterator(Slice c) : c(c), n(0) {}
     bool not_at_end()
     {
       fwd(); return not_done();
@@ -184,6 +197,13 @@ public:
     if (stop < -1)
       throw std::invalid_argument("Slice(): stop < -1");
   }
+  Slice(const Slice&) = default;
+//Slice(Slice&& rhs)
+//  : it(rhs.it), end_(rhs.end_),
+//    start(rhs.start), stop(rhs.stop), step(rhs.step)
+//{
+//  std::cout << "*** Slice MOVE ***" << std::endl;           //  TODO
+//}
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
 };                                                            //  }}}1
@@ -214,14 +234,14 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Zip& c;
+    Zip c;
   public:
-    iterator(Zip& c) : c(c) {}
-    bool not_at_end() const
+    iterator(Zip c) : c(c) {}
+    bool not_at_end()
     {
       return c.it_a != c.end_a && c.it_b != c.end_b;
     }
-    bool operator != (const iterator&) const
+    bool operator != (const iterator&)
     {
       return not_at_end();
     }
@@ -229,7 +249,7 @@ public:
     {
       if (not_at_end()) { ++c.it_a; ++c.it_b; }
     }
-    std::tuple<unq<S>, unq<T>> operator*() const
+    std::tuple<unq<S>, unq<T>> operator*()
     {
       if (not_at_end()) return std::make_tuple(*c.it_a, *c.it_b);
       else throw std::out_of_range(
@@ -243,6 +263,13 @@ public:
   Zip(const ItA& begin_a, const ItA& end_a,
       const ItB& begin_b, const ItB& end_b)
     : it_a(begin_a), end_a(end_a), it_b(begin_b), end_b(end_b) {}
+  Zip(const Zip&) = default;
+//Zip(Zip&& rhs)
+//  : it_a(rhs.it_a), end_a(rhs.end_a),
+//    it_b(rhs.it_b), end_b(rhs.end_b)
+//{
+//  std::cout << "*** Zip MOVE ***" << std::endl;             //  TODO
+//}
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
 };                                                            //  }}}1
@@ -290,7 +317,7 @@ public:
   class iterator                                              //  {{{2
   {
   private:
-    Generator& g; std::shared_ptr<const unq<T>> v; bool peeked;
+    Generator g; std::shared_ptr<const unq<T>> v; bool peeked;
   private:
     void peek()
     {
@@ -301,7 +328,7 @@ public:
       }
     }
   public:
-    iterator(Generator& g) : g(g), v(nullptr), peeked(false) {}
+    iterator(Generator g) : g(g), v(nullptr), peeked(false) {}
     bool not_at_end()
     {
       peek(); return v != nullptr;
@@ -326,10 +353,10 @@ private:
 public:
   template <class F>
   Generator(F next) : next(next) {}
-  Generator(const Generator& rhs) = delete;
+  Generator(const Generator&) = default;
   Generator(Generator&& rhs) : next(rhs.next)
   {
-    std::cout << "*** MOVE ***" << std::endl;                 //  TODO
+    std::cout << "*** Generator MOVE ***" << std::endl;       //  TODO
   }
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
@@ -390,7 +417,7 @@ public:
     : data(std::move(rhs.data)), it(rhs.it), end_(rhs.end_),
       next(rhs.next), has_next(rhs.has_next)
   {
-    std::cout << "*** MOVE ***" << std::endl;                 //  TODO
+    std::cout << "*** LList MOVE ***" << std::endl;           //  TODO
   }
   iterator begin() { return iterator(*this); }
   iterator end()   { return iterator(*this); }
@@ -519,7 +546,7 @@ int main()                                                    //  {{{1
   {
     cout << "$generator(37; 1, i < 20, i+=2; 42)" << endl;
     $generator(gen) {
-      int i;
+      int i = 0;
       $gbegin(int)
         $yield(37)
         for (i = 1; i < 20; i+=2) $yield(i)
